@@ -20,16 +20,17 @@ from dateutil.relativedelta import relativedelta
 import os
 from models import RfidTagInfo
 from RFID import RFIDReader
+import MFRC522.MFRC522 as MFRC522
 from RFID import RFIDMockup
 from GPIO import GPIO
 from GPIO import GPIOStub
 
-
+GPIO_FEEDBACK = 16
 GPIO_RELAY = 12
 GPIO_LED_GREEN = 11
 GPIO_LED_YELLOW = 13
 GPIO_LED_RED = 15
-
+GPIO_RESTART_ARDUINO = 18
 
 
 class BackgroundWorker():
@@ -46,6 +47,7 @@ class BackgroundWorker():
         self.app = app
         self.requestOpening = False
         self.openingTimer = -1
+        self.doorOpen = False
         self.requestTimer = 0
         self.syncTimer = 0
         self.ledStateTimer = 0
@@ -72,6 +74,11 @@ class BackgroundWorker():
         GPIO.setup(GPIO_RELAY, GPIO.OUT, initial=GPIO.HIGH)
         GPIO.output(GPIO_RELAY, GPIO.HIGH)
 
+	GPIO.setup(GPIO_RESTART_ARDUINO, GPIO.OUT, initial=GPIO.LOW)
+	GPIO.output(GPIO_RESTART_ARDUINO, GPIO.LOW)
+	time.sleep(1)	
+	GPIO.output(GPIO_RESTART_ARDUINO, GPIO.HIGH)
+
         GPIO.setup(GPIO_LED_GREEN, GPIO.OUT, initial=GPIO.LOW)
         GPIO.output(GPIO_LED_GREEN, GPIO.LOW)
 
@@ -81,7 +88,10 @@ class BackgroundWorker():
         GPIO.setup(GPIO_LED_RED, GPIO.OUT, initial=GPIO.LOW)
         GPIO.output(GPIO_LED_RED, GPIO.LOW)
 
+	GPIO.setup(GPIO_FEEDBACK, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
+        # Create an object of the class MFRC522
+        self.MIFAREReader = MFRC522.MFRC522()
 
     def run(self):
         # if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
@@ -110,16 +120,16 @@ class BackgroundWorker():
             print "background-worker withdrawRFIDTag"
 
             for i in range(0, 4):
-                (status, TagType) = RFIDReader.MFRC522_Request(RFIDReader.PICC_REQIDL)
-                (status, uid) = RFIDReader.MFRC522_Anticoll()
-                if status == RFIDReader.MI_OK:
+                (status, TagType) = self.MIFAREReader.MFRC522_Request(self.MIFAREReader.PICC_REQIDL)
+                (status, uid) = self.MIFAREReader.MFRC522_Anticoll()
+                if status == self.MIFAREReader.MI_OK:
                     break
                 else:
                     print "retry anticoll card (withdrawRFIDTag)"
                     time.sleep(0.3)
 
             # If we have the UID, continue
-            if status == RFIDReader.MI_OK:
+            if status == self.MIFAREReader.MI_OK:
                 # Print UID
                 uid_str = str(uid[0]) + "." + str(uid[1]) + "." + str(uid[2]) + "." + str(uid[3])
                 print "Card read UID: " + uid_str
@@ -153,26 +163,26 @@ class BackgroundWorker():
                 TrailerBlockAddr = user.cardAuthSector * 4 + 3
 
                 # Select the scanned tag
-                RFIDReader.MFRC522_SelectTag(uid)
+                self.MIFAREReader.MFRC522_SelectTag(uid)
 
                 # Authenticate for secret-block
-                status = RFIDReader.MFRC522_Auth(RFIDReader.PICC_AUTHENT1A, SecretBlockAddr, userkey, uid)
+                status = self.MIFAREReader.MFRC522_Auth(self.MIFAREReader.PICC_AUTHENT1A, SecretBlockAddr, userkey, uid)
 
                 # write user secret
-                if status == RFIDReader.MI_OK:
-                    RFIDReader.MFRC522_Write(SecretBlockAddr, defaultsecret)
+                if status == self.MIFAREReader.MI_OK:
+                    self.MIFAREReader.MFRC522_Write(SecretBlockAddr, defaultsecret)
                 else:
                     print "Authentication error while write rfid-tag secret sector"
                     self.lock = False
                     return False
 
-                status = RFIDReader.MFRC522_Auth(RFIDReader.PICC_AUTHENT1A, TrailerBlockAddr, userkey, uid)
+                status = self.MIFAREReader.MFRC522_Auth(self.MIFAREReader.PICC_AUTHENT1A, TrailerBlockAddr, userkey, uid)
 
                 # Check if authenticated
-                if status == RFIDReader.MI_OK:
+                if status == self.MIFAREReader.MI_OK:
                     print "Read TrailerBlock :"
                     # Read block 8
-                    result = RFIDReader.MFRC522_Read(TrailerBlockAddr)
+                    result = self.MIFAREReader.MFRC522_Read(TrailerBlockAddr)
                     print result
 
                     for x in range(0, 6):
@@ -181,10 +191,10 @@ class BackgroundWorker():
 
                     print "Write new trailer:"
                     # Write the data
-                    RFIDReader.MFRC522_Write(TrailerBlockAddr, result)
+                    self.MIFAREReader.MFRC522_Write(TrailerBlockAddr, result)
                     print "\n"
 
-                    RFIDReader.MFRC522_StopCrypto1()
+                    self.MIFAREReader.MFRC522_StopCrypto1()
                     # unlock and return succesfully
                     self.lock = False
                     return True
@@ -214,16 +224,16 @@ class BackgroundWorker():
             print "background-worker assignRFIDTag"
 
             for i in range(0, 4):
-                (status, TagType) = RFIDReader.MFRC522_Request(RFIDReader.PICC_REQIDL)
-                (status, uid) = RFIDReader.MFRC522_Anticoll()
-                if status == RFIDReader.MI_OK:
+                (status, TagType) = self.MIFAREReader.MFRC522_Request(self.MIFAREReader.PICC_REQIDL)
+                (status, uid) = self.MIFAREReader.MFRC522_Anticoll()
+                if status == self.MIFAREReader.MI_OK:
                     break
                 else:
                     print "retry anticoll card (assignRFIDTag)"
                     time.sleep(0.3)
 
             # If we have the UID, continue
-            if status == RFIDReader.MI_OK:
+            if status == self.MIFAREReader.MI_OK:
                 # Print UID
                 uid_str = str(uid[0]) + "." + str(uid[1]) + "." + str(uid[2]) + "." + str(uid[3])
                 print "Card read UID: " + uid_str
@@ -257,23 +267,23 @@ class BackgroundWorker():
                 TrailerBlockAddr = user.cardAuthSector * 4 + 3
 
                 # Select the scanned tag
-                RFIDReader.MFRC522_SelectTag(uid)
+                self.MIFAREReader.MFRC522_SelectTag(uid)
 
                 # Authenticate for secret-block
-                status = RFIDReader.MFRC522_Auth(RFIDReader.PICC_AUTHENT1A, SecretBlockAddr, defaultkey, uid)
+                status = self.MIFAREReader.MFRC522_Auth(self.MIFAREReader.PICC_AUTHENT1A, SecretBlockAddr, defaultkey, uid)
 
                 # write user secret
-                if status == RFIDReader.MI_OK:
-                    RFIDReader.MFRC522_Write(SecretBlockAddr, usersecret)
+                if status == self.MIFAREReader.MI_OK:
+                    self.MIFAREReader.MFRC522_Write(SecretBlockAddr, usersecret)
                 else:
                     print "Authentication error while write rfid-tag secret sector"
                     self.lock = False
                     return False
 
                 # Authenticate
-                status = RFIDReader.MFRC522_Auth(RFIDReader.PICC_AUTHENT1A, TrailerBlockAddr, defaultkey, uid)
-                if status == RFIDReader.MI_OK:
-                    result = RFIDReader.MFRC522_Read(TrailerBlockAddr)
+                status = self.MIFAREReader.MFRC522_Auth(self.MIFAREReader.PICC_AUTHENT1A, TrailerBlockAddr, defaultkey, uid)
+                if status == self.MIFAREReader.MI_OK:
+                    result = self.MIFAREReader.MFRC522_Read(TrailerBlockAddr)
                     print result
 
                     for x in range(0, 6):
@@ -282,10 +292,10 @@ class BackgroundWorker():
 
                     print "Write new trailer:"
                     # Write the data
-                    RFIDReader.MFRC522_Write(TrailerBlockAddr, result)
+                    self.MIFAREReader.MFRC522_Write(TrailerBlockAddr, result)
                     print "\n"
 
-                    RFIDReader.MFRC522_StopCrypto1()
+                    self.MIFAREReader.MFRC522_StopCrypto1()
                     # unlock and return succesfully
                     self.lock = False
                     return True
@@ -315,11 +325,15 @@ class BackgroundWorker():
         try:
             self.lock = True
 
-            (status, TagType) = RFIDReader.MFRC522_Request(RFIDReader.PICC_REQIDL)
+            #(status, TagType) = self.MIFAREReader.MFRC522_Request(self.MIFAREReader.PICC_REQIDL)
+	    (status,TagType) = self.MIFAREReader.MFRC522_Request(self.MIFAREReader.PICC_REQIDL)
+ 
+            print status,TagType
 
             for i in range(0, 2):
-                (status, uid) = RFIDReader.MFRC522_Anticoll()
-                if status == RFIDReader.MI_OK:
+                (status, uid) = self.MIFAREReader.MFRC522_Anticoll()
+            	print "UID ", uid
+                if status == self.MIFAREReader.MI_OK:
                     break
                 else:
                     time.sleep(0.2)
@@ -327,7 +341,7 @@ class BackgroundWorker():
             self.resetTagInfo()
 
             # If we have the UID, continue
-            if status == RFIDReader.MI_OK:
+            if status == self.MIFAREReader.MI_OK:
 
                 # Print UID
                 self.tagInfo.tagId = str(uid[0]) + "." + str(uid[1]) + "." + str(uid[2]) + "." + str(uid[3])
@@ -364,15 +378,15 @@ class BackgroundWorker():
                 TrailerBlockAddr = user.cardAuthSector * 4 + 3
 
                 # Select the scanned tag
-                RFIDReader.MFRC522_SelectTag(uid)
+                self.MIFAREReader.MFRC522_SelectTag(uid)
 
                 # Authenticate
-                status = RFIDReader.MFRC522_Auth(RFIDReader.PICC_AUTHENT1A, SecretBlockAddr, userkey, uid)
+                status = self.MIFAREReader.MFRC522_Auth(self.MIFAREReader.PICC_AUTHENT1A, SecretBlockAddr, userkey, uid)
 
                 # Check if authenticated
-                if status == RFIDReader.MI_OK:
+                if status == self.MIFAREReader.MI_OK:
 
-                    readSecret = RFIDReader.MFRC522_Read(SecretBlockAddr)
+                    readSecret = self.MIFAREReader.MFRC522_Read(SecretBlockAddr)
                     # print readSecret
                     readSecretString = ''
                     i = 0
@@ -380,7 +394,7 @@ class BackgroundWorker():
                     if not readSecret:
                         print "Read secret string is empty."
                         self.lock = False
-                        RFIDReader.MFRC522_StopCrypto1()
+                        self.MIFAREReader.MFRC522_StopCrypto1()
                         return False
 
                     for x in readSecret:
@@ -393,7 +407,8 @@ class BackgroundWorker():
 
                     if readSecretString == user.cardSecret:
                         print "correct secret"
-                        if security.checkUserAccessPrivleges(datetime.datetime.now(),user) == "Access granted.":
+			t = datetime.datetime.now() 
+                        if security.checkUserAccessPrivleges(t, user) == "Access granted.":
                             if datetime.datetime.now() > user.lastAccessDateTime + datetime.timedelta(minutes=config.NODE_LOG_MERGE):
                                 user.lastAccessDateTime = datetime.datetime.now()
 
@@ -439,7 +454,7 @@ class BackgroundWorker():
                         print "no user-access privilege"
                         self.ledState = self.LED_STATE_ACCESS_DENIED
 
-                    RFIDReader.MFRC522_StopCrypto1()
+                    self.MIFAREReader.MFRC522_StopCrypto1()
                     self.lock = False
                     return True
                 else:
@@ -829,7 +844,11 @@ class BackgroundWorker():
         if self.requestTimer >= 4:
             self.requestTimer = 0
             try:
-               self.checkRFIDTag()
+                if not self.doorOpen:
+		    print "Door not open"
+                    self.checkRFIDTag()
+		else: 
+		    print "Die Tuer ist offen, lese RFID-Tag nicht ein"
             except Exception, e:
                 import traceback
                 print traceback.format_exc()
@@ -889,23 +908,32 @@ class BackgroundWorker():
         # print "Check for opening request"
         if self.requestOpening == True:
             self.requestOpening = False
+            self.doorOpen = True
             self.openingTimer = 0;
             print "Opening request"
 
         if self.openingTimer >= 0:
             if self.openingTimer == 0:
                 print "Openening door"
-            GPIO.output(GPIO_RELAY, GPIO.LOW)
+                GPIO.output(GPIO_RELAY, GPIO.LOW)
 
             self.openingTimer += 1
             if self.openingTimer >= 16:
                 self.openingTimer = -1
                 print "Closing door"
                 GPIO.output(GPIO_RELAY, GPIO.HIGH)
-                self.ledState = self.LED_STATE_CLOSED
+                #self.ledState = self.LED_STATE_CLOSED
         else:
             GPIO.output(GPIO_RELAY, GPIO.HIGH)
 
+        if self.doorOpen:
+            if GPIO.input(GPIO_FEEDBACK):
+		print "GPIO_FEEDBACK = true, Fenster offen/System nicht bereit"
+	    else:
+		print "GPIO_FEEDBACK = false, Fenster geschlossen"
+		self.doorOpen = False
+		self.ledState = self.LED_STATE_CLOSED
+            
         self.ledStateTimer += 1
         if self.ledStateTimer >= 0:
             self.ledStateTimer = 0

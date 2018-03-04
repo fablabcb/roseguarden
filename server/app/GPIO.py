@@ -75,21 +75,21 @@ class GPIOStub:
         logging.log("GPIO_LOG", "GPIO: Setup GPIO " + str(channel) + " to " + str(type))
 
 
-if platform.platform_getType() == platform.RASPBERRY_PI or platform.platform_getType() == platform.RASPBERRY_PI_2:
-    try:
-        import RPi.GPIO as GPIO
+#if platform.platform_getType() == platform.RASPBERRY_PI or platform.platform_getType() == platform.RASPBERRY_PI_2:
+#    try:
+import RPi.GPIO as GPIO
 
-        print "INFO: Using RPi.GPIO as GPIO"
-        GPIOMockup = None
-        GPIO.setmode(GPIO.BOARD)
-    except RuntimeError:
-        print(
-            "Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using 'sudo' to run your script")
-else:
-    print "WARNING: Using GPIOWrapper as GPIO"
-    GPIOState = GPIOStubState()
-    GPIO = GPIOStub(GPIOStubState)
-    GPIO.setmode(GPIO.BOARD)
+print "INFO: Using RPi.GPIO as GPIO"
+GPIOMockup = None
+GPIO.setmode(GPIO.BOARD)
+#    except RuntimeError:
+#        print(
+#            "Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using 'sudo' to run your script")
+#else:
+#    print "WARNING: Using GPIOWrapper as GPIO"
+#    GPIOState = GPIOStubState()
+#    GPIO = GPIOStub(GPIOStubState)
+#    GPIO.setmode(GPIO.BOARD)
 
 
 

@@ -29,7 +29,7 @@ while continue_reading:
     
     # Scan for cards    
     (status,TagType) = MIFAREReader.MFRC522_Request(MIFAREReader.PICC_REQIDL)
-
+    print (MIFAREReader.MFRC522_Request(MIFAREReader.PICC_REQIDL))
     # If a card is found
     if status == MIFAREReader.MI_OK:
         print "Card detected"

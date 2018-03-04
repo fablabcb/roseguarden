@@ -1,8 +1,6 @@
-__author__ = 'drobisch'
-
 from distutils.core import setup, Extension
 
-spi_module = Extension('spi', sources = ['spi.c'])
+module1 = Extension('spi', sources = ['spi.c'])
 
 setup (
     name = 'SPI-Py',
@@ -13,4 +11,5 @@ setup (
     description = 'SPI-Py: Hardware SPI as a C Extension for Python',
     license='GPL-v2',
     platforms=['Linux'],
-    ext_modules = [spi_module])
+    ext_modules = [module1]
+)
